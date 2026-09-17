@@ -7,6 +7,7 @@ import { ok } from "@/lib/utils/api";
 const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
 const EXTENSION_BY_TYPE = {
   "image/jpeg": "jpg",
+  "image/jpg": "jpg", // non-standard, but some browsers/OS cameras send this instead of image/jpeg
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
@@ -50,15 +51,20 @@ export async function POST(request) {
 
     if (!file || typeof file === "string") throw new ApiError(400, "No file provided");
     const extension = EXTENSION_BY_TYPE[file.type];
-    if (!extension) throw new ApiError(400, "Unsupported file type");
+    if (!extension) throw new ApiError(400, `Unsupported file type: "${file.type || "unknown"}". Allowed: JPG, PNG, WEBP, GIF, PDF.`);
     if (file.size > MAX_FILE_SIZE) throw new ApiError(400, "File exceeds the 8MB limit");
 
     const dir = path.join(UPLOAD_ROOT, folder);
-    await fs.mkdir(dir, { recursive: true });
-
     const filename = `${Date.now()}-${randomUUID()}.${extension}`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(path.join(dir, filename), buffer);
+
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, filename), buffer);
+    } catch (fsErr) {
+      console.error("[upload] failed to write file to disk:", fsErr);
+      throw new ApiError(500, "Could not save the file on the server (storage is not writable). Check that public/uploads is writable by the app process.");
+    }
 
     return ok({ url: `/uploads/${folder}/${filename}` }, { status: 201 });
   } catch (err) {

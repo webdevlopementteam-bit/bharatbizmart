@@ -1,9 +1,14 @@
 const isProd = process.env.NODE_ENV === "production";
 
-
+// 'unsafe-eval' stays allowed in every environment: 'unsafe-inline' is
+// already present below (necessary for Next's own bootstrap scripts), which
+// already permits arbitrary injected <script> execution, so dropping eval
+// only in production bought no real security margin while risking silently
+// breaking client-side hydration/interactivity (a bundler runtime detail
+// that can differ between dev and prod) with no easy way to detect it.
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",
   "font-src 'self' data:",

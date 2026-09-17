@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import FileUpload from "@/components/dashboard/FileUpload";
 import { Plus, Trash2 } from "lucide-react";
 
 export default function AdminBlogPage() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", excerpt: "", content: "", status: "draft" });
+  const [form, setForm] = useState({ title: "", excerpt: "", content: "", featuredImage: "", status: "draft" });
 
   const load = () => {
     fetch("/api/admin/blog").then((r) => r.json()).then((d) => setPosts(d.posts || [])).finally(() => setLoading(false));
@@ -27,7 +28,7 @@ export default function AdminBlogPage() {
     const data = await res.json();
     if (data.success) {
       toast.success("Post created");
-      setForm({ title: "", excerpt: "", content: "", status: "draft" });
+      setForm({ title: "", excerpt: "", content: "", featuredImage: "", status: "draft" });
       setShowForm(false);
       load();
     } else toast.error(data.message);
@@ -60,6 +61,12 @@ export default function AdminBlogPage() {
         <form onSubmit={submit} className="mb-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
           <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input value={form.excerpt} onChange={(e) => setForm({ ...form, excerpt: e.target.value })} placeholder="Excerpt" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <FileUpload
+            label="Featured Image"
+            value={form.featuredImage}
+            onChange={(url) => setForm({ ...form, featuredImage: url })}
+            folder="blog"
+          />
           <textarea required rows={6} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="Content" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <div className="flex gap-2">
             <Button type="submit" size="sm">Save as Draft</Button>
