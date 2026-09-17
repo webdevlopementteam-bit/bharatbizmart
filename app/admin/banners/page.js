@@ -72,7 +72,7 @@ export default function AdminBannersPage() {
             <option value="category_top">Category Top</option>
             <option value="sidebar">Sidebar</option>
           </select>
-          <FileUpload label="Banner Image" value={form.image} onChange={(url) => setForm({ ...form, image: url })} folder="bharatbizmart/banners" />
+          <FileUpload label="Banner Image" value={form.image} onChange={(url) => setForm({ ...form, image: url })} folder="banners" />
           <Button type="submit" size="sm" className="sm:col-span-2">Save Banner</Button>
         </form>
       )}

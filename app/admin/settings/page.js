@@ -7,7 +7,6 @@ import { useAuth } from "@/components/AuthProvider";
 
 const envGroups = [
   { title: "Domain / Multi-tenant", vars: ["NEXT_PUBLIC_ROOT_DOMAIN", "NEXT_PUBLIC_APP_URL"] },
-  { title: "Storage (Cloudinary)", vars: ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"] },
   { title: "Payments", vars: ["PAYMENT_PROVIDER", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"] },
   { title: "Email", vars: ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "EMAIL_FROM"] },
 ];

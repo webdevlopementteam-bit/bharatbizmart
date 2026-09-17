@@ -93,7 +93,7 @@ export default function ProductForm({ initialProduct, productId }) {
               </button>
             </div>
           ))}
-          <FileUpload value="" onChange={addImage} folder="bharatbizmart/products" />
+          <FileUpload value="" onChange={addImage} folder="products" />
         </div>
       </section>
 

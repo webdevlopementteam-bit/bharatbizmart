@@ -78,8 +78,8 @@ export default function BusinessProfilePage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-sm font-semibold text-slate-900">Branding</h2>
         <div className="mt-4 grid grid-cols-2 gap-6">
-          <FileUpload label="Logo" value={vendor.logo} onChange={set("logo")} folder="bharatbizmart/logos" />
-          <FileUpload label="Cover Image" value={vendor.coverImage} onChange={set("coverImage")} folder="bharatbizmart/covers" />
+          <FileUpload label="Logo" value={vendor.logo} onChange={set("logo")} folder="logos" />
+          <FileUpload label="Cover Image" value={vendor.coverImage} onChange={set("coverImage")} folder="covers" />
         </div>
       </section>
 
@@ -119,7 +119,7 @@ export default function BusinessProfilePage() {
                 <option value="registration">Business Registration</option>
               </select>
             </div>
-            <FileUpload label="Document" value={docUrl} onChange={setDocUrl} folder="bharatbizmart/documents" accept="image/*,application/pdf" />
+            <FileUpload label="Document" value={docUrl} onChange={setDocUrl} folder="documents" accept="image/*,application/pdf" />
             <Button onClick={submitVerification} disabled={submittingDoc}>{submittingDoc ? "Submitting..." : "Submit for Verification"}</Button>
           </div>
         </section>
