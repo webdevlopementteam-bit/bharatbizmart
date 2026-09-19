@@ -1,6 +1,10 @@
 import { connectDB } from "@/lib/db/connect";
 import Vendor from "@/models/Vendor";
 import Website from "@/models/Website";
+import Product from "@/models/Product";
+import Service from "@/models/Service";
+import Subscription from "@/models/Subscription";
+import User from "@/models/User";
 import Notification from "@/models/Notification";
 import AuditLog from "@/models/AuditLog";
 import { requireUser, handleApiError, ApiError } from "@/lib/auth/guard";
@@ -79,6 +83,47 @@ export async function PUT(request, { params }) {
     });
 
     return ok({ vendor });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+// Permanently removes a vendor's storefront (business profile, products,
+// services, website, subscription) — superadmin-only, since unlike
+// suspend/reject this can't be undone. The owning user account is kept but
+// demoted back to a plain buyer rather than deleted, so a mistaken delete
+// doesn't lock someone out of their login entirely. Reviews/leads/enquiries
+// tied to the vendor are left as historical records rather than cascaded,
+// since that data belongs to the buyers who created it, not the vendor.
+export async function DELETE(request, { params }) {
+  try {
+    const admin = await requireUser(["superadmin"]);
+    const { id } = await params;
+
+    await connectDB();
+    const vendor = await Vendor.findById(id);
+    if (!vendor) throw new ApiError(404, "Vendor not found");
+
+    await Promise.all([
+      Product.deleteMany({ vendor: vendor._id }),
+      Service.deleteMany({ vendor: vendor._id }),
+      Website.deleteMany({ vendor: vendor._id }),
+      Subscription.deleteMany({ vendor: vendor._id }),
+      User.updateOne({ _id: vendor.owner }, { $set: { role: "buyer" }, $unset: { vendor: 1 } }),
+    ]);
+
+    await Vendor.deleteOne({ _id: vendor._id });
+
+    await AuditLog.create({
+      actor: admin._id,
+      actorRole: admin.role,
+      action: "vendor.deleted",
+      targetType: "Vendor",
+      targetId: vendor._id,
+      metadata: { businessName: vendor.businessName },
+    });
+
+    return ok({ deleted: true });
   } catch (err) {
     return handleApiError(err);
   }

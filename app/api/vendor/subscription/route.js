@@ -3,11 +3,11 @@ import Subscription from "@/models/Subscription";
 import Payment from "@/models/Payment";
 import Invoice from "@/models/Invoice";
 import SubscriptionPlan from "@/models/SubscriptionPlan";
-import Vendor from "@/models/Vendor";
 import Coupon from "@/models/Coupon";
 import { requireUser, requireVendorContext, handleApiError, ApiError } from "@/lib/auth/guard";
-import { ok, fail } from "@/lib/utils/api";
-import { nanoid } from "nanoid";
+import { ok } from "@/lib/utils/api";
+import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/payments/razorpay";
+import { activateSubscriptionPlan } from "@/lib/payments/activateSubscriptionPlan";
 
 export async function GET() {
   try {
@@ -23,12 +23,10 @@ export async function GET() {
 }
 
 /**
- * Upgrades/downgrades the vendor's plan. If a real payment provider is
- * configured this is where you'd create a Razorpay/Stripe order and redirect
- * to checkout; without one configured, non-free plans are activated directly
- * so the rest of the platform (limits, custom domains, templates) is fully
- * testable end-to-end, and a Payment+Invoice record is still created for
- * traceability.
+ * Starts a plan change. Free plans (and any deployment without a Razorpay
+ * key configured) activate immediately, same as before. A real paid
+ * upgrade instead creates a Razorpay order and returns it for the client to
+ * open in checkout — nothing is activated until /verify confirms payment.
  */
 export async function POST(request) {
   try {
@@ -56,44 +54,43 @@ export async function POST(request) {
           : Math.max(0, amount - coupon.discountValue);
     }
 
-    const isConfigured = !!process.env.RAZORPAY_KEY_ID;
+    if (amount <= 0 || !isRazorpayConfigured()) {
+      const payment = await Payment.create({
+        vendor: vendor._id,
+        amount,
+        provider: isRazorpayConfigured() ? "razorpay" : "manual",
+        status: "success",
+        purpose: "subscription",
+        meta: { planKey, couponCode },
+      });
+      const subscription = await activateSubscriptionPlan({ vendor, plan, amount, coupon, payment });
+      return ok({ activated: true, subscription, payment });
+    }
+
     const payment = await Payment.create({
       vendor: vendor._id,
       amount,
-      provider: isConfigured ? "razorpay" : "manual",
-      status: "success",
+      provider: "razorpay",
+      status: "created",
       purpose: "subscription",
+      meta: { planKey, couponCode },
     });
 
-    if (amount > 0) {
-      await Invoice.create({
-        vendor: vendor._id,
-        payment: payment._id,
-        invoiceNumber: `INV-${nanoid(8).toUpperCase()}`,
-        amount,
-        gstAmount: Math.round(amount * 0.18),
-        totalAmount: Math.round(amount * 1.18),
-        status: "paid",
-      });
-    }
-
-    if (coupon) {
-      await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 } });
-    }
-
-    await Subscription.updateMany({ vendor: vendor._id, status: "active" }, { $set: { status: "cancelled" } });
-    const subscription = await Subscription.create({
-      vendor: vendor._id,
-      plan: plan._id,
-      planKey: plan.key,
-      status: "active",
-      startedAt: new Date(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    const order = await createRazorpayOrder({
+      amountInRupees: amount,
+      receipt: `sub_${payment._id}`,
+      notes: { vendorId: String(vendor._id), planKey, paymentId: String(payment._id) },
     });
 
-    await Vendor.updateOne({ _id: vendor._id }, { $set: { subscriptionPlan: plan.key, subscription: subscription._id } });
+    payment.providerOrderId = order.id;
+    await payment.save();
 
-    return ok({ subscription, payment });
+    return ok({
+      requiresPayment: true,
+      paymentId: String(payment._id),
+      order: { id: order.id, amount: order.amount, currency: order.currency },
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
   } catch (err) {
     return handleApiError(err);
   }

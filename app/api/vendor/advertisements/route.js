@@ -5,6 +5,8 @@ import Product from "@/models/Product";
 import { requireUser, requireVendorContext, handleApiError, ApiError } from "@/lib/auth/guard";
 import { ok, fail } from "@/lib/utils/api";
 import { getAdPackage } from "@/lib/utils/adPackages";
+import { createRazorpayOrder, isRazorpayConfigured } from "@/lib/payments/razorpay";
+import { activateAdvertisement } from "@/lib/payments/activateAdvertisement";
 
 export async function GET() {
   try {
@@ -20,10 +22,10 @@ export async function GET() {
 
 /**
  * Self-serve "Promote my business" purchase (IndiaMART Star Supplier /
- * TradeIndia Super Seller style upsell). Same demo-payment pattern as
- * subscription upgrades: activates immediately and records a real Payment,
- * with the Razorpay checkout redirect being the one piece that needs a live
- * key to go further (see /api/vendor/subscription for the identical note).
+ * TradeIndia Super Seller style upsell). With a Razorpay key configured this
+ * creates a real order for the client to pay via checkout, and the
+ * promotion only goes live once /verify confirms the payment; without a key
+ * configured it still activates immediately so the feature stays testable.
  */
 export async function POST(request) {
   try {
@@ -42,32 +44,43 @@ export async function POST(request) {
       if (!product) throw new ApiError(404, "Product not found");
     }
 
+    if (!isRazorpayConfigured()) {
+      const payment = await Payment.create({
+        vendor: vendor._id,
+        amount: pkg.price,
+        provider: "manual",
+        status: "success",
+        purpose: "advertisement",
+        meta: { packageKey, productId },
+      });
+      const ad = await activateAdvertisement({ vendor, pkg, productId });
+      return ok({ activated: true, ad, payment }, { status: 201 });
+    }
+
     const payment = await Payment.create({
       vendor: vendor._id,
       amount: pkg.price,
-      provider: process.env.RAZORPAY_KEY_ID ? "razorpay" : "manual",
-      status: "success",
+      provider: "razorpay",
+      status: "created",
       purpose: "advertisement",
+      meta: { packageKey, productId },
     });
 
-    const startDate = new Date();
-    const endDate = new Date(startDate.getTime() + pkg.durationDays * 24 * 60 * 60 * 1000);
-
-    const ad = await Advertisement.create({
-      vendor: vendor._id,
-      type: pkg.type,
-      title: pkg.name,
-      product: productId || undefined,
-      startDate,
-      endDate,
-      status: "active",
+    const order = await createRazorpayOrder({
+      amountInRupees: pkg.price,
+      receipt: `ad_${payment._id}`,
+      notes: { vendorId: String(vendor._id), packageKey, paymentId: String(payment._id) },
     });
 
-    if (pkg.type === "featured_product" && productId) {
-      await Product.updateOne({ _id: productId }, { $set: { isFeatured: true } });
-    }
+    payment.providerOrderId = order.id;
+    await payment.save();
 
-    return ok({ ad, payment }, { status: 201 });
+    return ok({
+      requiresPayment: true,
+      paymentId: String(payment._id),
+      order: { id: order.id, amount: order.amount, currency: order.currency },
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
   } catch (err) {
     return handleApiError(err);
   }

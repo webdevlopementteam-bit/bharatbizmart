@@ -8,6 +8,7 @@ import clsx from "clsx";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/components/AuthProvider";
 import { getVendorSiteHost } from "@/lib/utils/vendorUrl";
+import { openRazorpayCheckout } from "@/lib/payments/razorpayCheckout";
 
 const steps = ["Account", "Business Info", "Location", "Categories", "Description", "Plan & Review"];
 
@@ -84,12 +85,54 @@ export default function SellerOnboardingWizard() {
       if (!res.ok || !data.success) throw new Error(data.message || "Registration failed");
       await refresh();
       toast.success("Business registered! Your website is being set up.");
+
+      // Registration always creates the account on the free plan — a paid
+      // plan picked in this step is only granted after real payment, so
+      // trigger that now the vendor account (and auth session) exist.
+      // Cancelling/failing payment here doesn't block onboarding: they land
+      // on the dashboard on the free plan and can upgrade any time.
+      if (form.plan !== "free") {
+        try {
+          await upgradeToSelectedPlan(form.plan, data.user);
+          toast.success(`Payment successful — you're on the ${form.plan} plan!`);
+        } catch (paymentErr) {
+          toast.error(paymentErr.message || "Payment was not completed — you're on the Free plan for now.");
+        }
+      }
+
       router.push("/dashboard");
     } catch (err) {
       toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const upgradeToSelectedPlan = async (planKey, registeredUser) => {
+    const checkoutRes = await fetch("/api/vendor/subscription", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planKey }),
+    });
+    const checkoutData = await checkoutRes.json();
+    if (!checkoutRes.ok || !checkoutData.success) throw new Error(checkoutData.message || "Could not start checkout");
+    if (checkoutData.activated) return; // no Razorpay key configured — already active
+
+    const paymentResponse = await openRazorpayCheckout({
+      order: checkoutData.order,
+      keyId: checkoutData.keyId,
+      name: "BharatBizMart",
+      description: `${planKey} plan subscription`,
+      prefill: { name: registeredUser?.name, email: registeredUser?.email },
+    });
+
+    const verifyRes = await fetch("/api/vendor/subscription/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentId: checkoutData.paymentId, ...paymentResponse }),
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyRes.ok || !verifyData.success) throw new Error(verifyData.message || "Payment verification failed");
   };
 
   return (

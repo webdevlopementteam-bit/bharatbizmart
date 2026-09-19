@@ -71,7 +71,11 @@ export async function POST(request) {
     gallery: branding?.gallery || [],
     description,
     categories: categories || [],
-    subscriptionPlan: plan || "free",
+    // Always start on the free plan regardless of what the wizard's plan
+    // step had selected — a paid plan is never granted without going
+    // through actual payment (see /api/vendor/subscription), which the
+    // client triggers separately right after this call succeeds.
+    subscriptionPlan: "free",
     status: "pending_approval",
     verification: { status: documents?.length ? "pending" : "unverified" },
   });
@@ -92,11 +96,11 @@ export async function POST(request) {
     },
   });
 
-  const subscriptionPlanDoc = await SubscriptionPlan.findOne({ key: plan || "free" });
+  const freePlanDoc = await SubscriptionPlan.findOne({ key: "free" });
   await Subscription.create({
     vendor: vendor._id,
-    plan: subscriptionPlanDoc?._id,
-    planKey: plan || "free",
+    plan: freePlanDoc?._id,
+    planKey: "free",
     status: "active",
     startedAt: new Date(),
   });

@@ -6,6 +6,8 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { Rocket, Megaphone } from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "@/components/AuthProvider";
+import { openRazorpayCheckout } from "@/lib/payments/razorpayCheckout";
 
 const PACKAGES = [
   { key: "featured_supplier_7", name: "Featured Supplier — 7 days", price: 499, desc: "Appear in the homepage Featured Suppliers carousel for 7 days.", requiresProduct: false },
@@ -15,6 +17,7 @@ const PACKAGES = [
 ];
 
 export default function PromotePage() {
+  const { user } = useAuth();
   const [ads, setAds] = useState([]);
   const [products, setProducts] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -41,7 +44,30 @@ export default function PromotePage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
-      toast.success("Promotion activated!");
+
+      if (data.activated) {
+        toast.success("Promotion activated!");
+        load();
+        return;
+      }
+
+      const paymentResponse = await openRazorpayCheckout({
+        order: data.order,
+        keyId: data.keyId,
+        name: "BharatBizMart",
+        description: pkg.name,
+        prefill: { name: user?.name, email: user?.email },
+      });
+
+      const verifyRes = await fetch("/api/vendor/advertisements/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: data.paymentId, ...paymentResponse }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.success) throw new Error(verifyData.message || "Payment verification failed");
+
+      toast.success("Payment successful — promotion activated!");
       load();
     } catch (err) {
       toast.error(err.message);

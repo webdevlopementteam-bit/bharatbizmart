@@ -6,12 +6,15 @@ import toast from "react-hot-toast";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
-import { Building2, ExternalLink } from "lucide-react";
+import { Building2, ExternalLink, Trash2 } from "lucide-react";
 import { getVendorSiteUrl } from "@/lib/utils/vendorUrl";
+import { useAuth } from "@/components/AuthProvider";
 
 const tone = { pending_approval: "premium", approved: "verified", suspended: "neutral", rejected: "neutral" };
 
 export default function AdminVendorsPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "superadmin";
   const [vendors, setVendors] = useState([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -33,6 +36,16 @@ export default function AdminVendorsPage() {
     const data = await res.json();
     if (data.success) {
       toast.success(`Vendor ${action}d`);
+      load();
+    } else toast.error(data.message);
+  };
+
+  const remove = async (v) => {
+    if (!confirm(`Permanently delete "${v.businessName}"? This removes their storefront, products, services and website — it cannot be undone.`)) return;
+    const res = await fetch(`/api/admin/vendors/${v._id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.success) {
+      toast.success("Vendor deleted");
       load();
     } else toast.error(data.message);
   };
@@ -88,6 +101,11 @@ export default function AdminVendorsPage() {
                       {v.status === "approved" && <Button size="sm" variant="outline" onClick={() => act(v._id, "suspend")}>Suspend</Button>}
                       {v.status === "suspended" && <Button size="sm" onClick={() => act(v._id, "activate")}>Activate</Button>}
                       <Link href={`/suppliers/${v.slug}`} className="text-xs font-medium text-slate-500 hover:text-brand">View</Link>
+                      {isSuperAdmin && (
+                        <button onClick={() => remove(v)} className="text-slate-400 hover:text-red-600" aria-label="Delete vendor">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

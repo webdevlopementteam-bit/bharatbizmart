@@ -74,7 +74,7 @@ export default function AdminShell({ user, children }) {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <aside className="hidden w-64 shrink-0 bg-gradient-to-b from-slate-900 to-[#1a1408] lg:block">{Sidebar}</aside>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 bg-gradient-to-b from-slate-900 to-[#1a1408] lg:block">{Sidebar}</aside>
       {open && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />

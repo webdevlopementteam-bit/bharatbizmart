@@ -13,6 +13,10 @@ const PaymentSchema = new mongoose.Schema(
 
     status: { type: String, enum: ["created", "pending", "success", "failed", "refunded"], default: "created", index: true },
     purpose: { type: String, enum: ["subscription", "advertisement", "coupon", "other"], default: "subscription" },
+    // What to activate once this payment verifies — set at order-creation
+    // time (server-computed, trusted) and read back at verify time instead
+    // of trusting whatever the client resends after the Razorpay redirect.
+    meta: { type: mongoose.Schema.Types.Mixed },
   },
   { timestamps: true }
 );

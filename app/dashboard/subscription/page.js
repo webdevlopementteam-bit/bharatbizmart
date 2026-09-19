@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import Button from "@/components/ui/Button";
 import clsx from "clsx";
+import { useAuth } from "@/components/AuthProvider";
+import { openRazorpayCheckout } from "@/lib/payments/razorpayCheckout";
 
 export default function SubscriptionPage() {
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [current, setCurrent] = useState(null);
   const [invoices, setInvoices] = useState([]);
@@ -30,7 +33,31 @@ export default function SubscriptionPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message);
-      toast.success(`Switched to ${planKey} plan`);
+
+      if (data.activated) {
+        toast.success(`Switched to ${planKey} plan`);
+        load();
+        return;
+      }
+
+      // Paid plan with Razorpay configured: open checkout, then verify.
+      const paymentResponse = await openRazorpayCheckout({
+        order: data.order,
+        keyId: data.keyId,
+        name: "BharatBizMart",
+        description: `${planKey} plan subscription`,
+        prefill: { name: user?.name, email: user?.email },
+      });
+
+      const verifyRes = await fetch("/api/vendor/subscription/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: data.paymentId, ...paymentResponse }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.success) throw new Error(verifyData.message || "Payment verification failed");
+
+      toast.success(`Payment successful — switched to ${planKey} plan`);
       load();
     } catch (err) {
       toast.error(err.message);

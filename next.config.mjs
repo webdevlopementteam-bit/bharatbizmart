@@ -8,12 +8,12 @@ const isProd = process.env.NODE_ENV === "production";
 // that can differ between dev and prod) with no easy way to detect it.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.razorpay.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data: blob:",
   "font-src 'self' data:",
   "connect-src 'self' https:",
-  "frame-src https://maps.google.com https://www.google.com",
+  "frame-src https://maps.google.com https://www.google.com https://*.razorpay.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
